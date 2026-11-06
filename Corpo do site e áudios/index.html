@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<!--
+  Página do site de áudios das apresentacoes.
+  Aqui eu não preciso mexer em nada: é ela que monta a lista de aulas,
+  o player de áudio e os botões de navegação.
+  O que eu edito no dia a dia fica no arquivo apresentacoes.js (apresentações,
+  títulos dos slides e nomes dos arquivos de áudio).
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Áudios das aulas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F7F9FC;
+    --surface: #FFFFFF;
+    --ink: #14202B;
+    --ink-soft: #3C4B59;
+    --accent: #0B5FA5;
+    --accent-ink: #FFFFFF;
+    --line: #B8C4D0;
+    --focus: #B45F06;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F1720;
+      --surface: #17222E;
+      --ink: #EAF0F6;
+      --ink-soft: #B9C6D3;
+      --accent: #7DB8F0;
+      --accent-ink: #0F1720;
+      --line: #3A4B5C;
+      --focus: #FFC266;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 112.5%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Atkinson Hyperlegible", Verdana, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 44rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+  .skip {
+    position: absolute; left: -999px; top: 0;
+    background: var(--accent); color: var(--accent-ink);
+    padding: .75rem 1rem; z-index: 10;
+  }
+  .skip:focus { left: 0; }
+  h1 { font-size: 1.9rem; line-height: 1.25; margin: 1rem 0 .5rem; }
+  h2 { font-size: 1.35rem; line-height: 1.3; margin: 0 0 .75rem; }
+  p { margin: 0 0 1rem; max-width: 40rem; }
+  .soft { color: var(--ink-soft); }
+  a { color: var(--accent); }
+  :focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
+
+  .lista-aulas { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: .75rem; }
+  .lista-aulas a {
+    display: block; padding: 1rem 1.25rem; text-decoration: none;
+    background: var(--surface); color: var(--ink);
+    border: 2px solid var(--line); border-radius: .5rem;
+  }
+  .lista-aulas a:hover { border-color: var(--accent); }
+  .lista-aulas strong { display: block; font-size: 1.15rem; color: var(--accent); }
+  .lista-aulas span { color: var(--ink-soft); }
+
+  .voltar { display: inline-block; margin-top: .5rem; }
+
+  .player {
+    background: var(--surface); border: 2px solid var(--line);
+    border-radius: .5rem; padding: 1.25rem; margin: 1.5rem 0;
+  }
+  .player audio { width: 100%; margin: .5rem 0 1rem; }
+  .botoes { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
+  button, select {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 2px solid var(--accent); border-radius: .5rem;
+    padding: .65rem 1.1rem; min-height: 3rem; cursor: pointer;
+  }
+  button.principal { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .opcoes { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center; }
+  .opcoes label { display: inline-flex; align-items: center; gap: .5rem; }
+  input[type="checkbox"] { width: 1.4rem; height: 1.4rem; accent-color: var(--accent); }
+  .aviso-erro {
+    border-left: 6px solid var(--focus); padding: .5rem 1rem; margin: 0 0 1rem;
+    background: var(--bg);
+  }
+
+  .slides { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+  .slides button {
+    width: 100%; text-align: left; border-color: var(--line);
+  }
+  .slides button[aria-current="true"] {
+    border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 700;
+  }
+  details { margin-top: 2rem; }
+  summary { cursor: pointer; font-weight: 700; }
+  kbd {
+    font: inherit; border: 2px solid var(--line); border-radius: .35rem;
+    padding: 0 .4rem; background: var(--surface);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .lista-aulas a { transition: border-color .15s; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#principal">Pular para o conteúdo</a>
+<div class="wrap">
+  <main id="principal"></main>
+  <div id="anuncio" role="status" aria-live="polite" class="soft" style="position:absolute;left:-9999px;"></div>
+</div>
+
+<script src="aulas.js"></script>
+<script>
+(function () {
+  var app = document.getElementById("principal");
+  var anuncio = document.getElementById("anuncio");
+  var atual = null; // estado da apresentação aberta
+
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    for (var k in (attrs || {})) {
+      if (k === "text") e.textContent = attrs[k];
+      else if (k === "class") e.className = attrs[k];
+      else e.setAttribute(k, attrs[k]);
+    }
+    (children || []).forEach(function (c) { e.appendChild(c); });
+    return e;
+  }
+
+  function guardar(chave, valor) { try { localStorage.setItem(chave, valor); } catch (e) {} }
+  function ler(chave) { try { return localStorage.getItem(chave); } catch (e) { return null; } }
+
+  function anunciar(texto) {
+    anuncio.textContent = "";
+    setTimeout(function () { anuncio.textContent = texto; }, 50);
+  }
+
+  /* ---------- Página inicial: lista de apresentações ---------- */
+  function telaInicial() {
+    document.title = "Áudios das aulas";
+    app.innerHTML = "";
+    var h1 = el("h1", { text: "Áudios das aulas", tabindex: "-1" });
+    app.appendChild(h1);
+    app.appendChild(el("p", { class: "soft", text: "Escolha uma apresentação para ouvir os áudios, slide por slide." }));
+
+    var ul = el("ul", { class: "lista-aulas" });
+    APRESENTACOES.forEach(function (ap) {
+      var a = el("a", { href: "#" + ap.id }, [
+        el("strong", { text: ap.titulo }),
+        el("span", { text: ap.descricao + " (" + ap.slides.length + " áudios)" })
+      ]);
+      ul.appendChild(el("li", {}, [a]));
+    });
+    app.appendChild(ul);
+    h1.focus();
+  }
+
+  /* ---------- Página de uma apresentação ---------- */
+  function telaAula(ap) {
+    document.title = "Áudios das aulas: " + ap.titulo;
+    app.innerHTML = "";
+
+    var salvo = parseInt(ler("pos:" + ap.id), 10);
+    atual = {
+      ap: ap,
+      i: (salvo >= 0 && salvo < ap.slides.length) ? salvo : 0,
+      velocidade: parseFloat(ler("velocidade")) || 1,
+      auto: ler("auto") === "1"
+    };
+
+    app.appendChild(el("a", { class: "voltar", href: "#", text: "Voltar para a lista de aulas" }));
+    var h1 = el("h1", { text: ap.titulo, tabindex: "-1" });
+    app.appendChild(h1);
+    if (ap.descricao) app.appendChild(el("p", { class: "soft", text: ap.descricao }));
+
+    var player = el("section", { class: "player", "aria-labelledby": "slide-atual" });
+    var h2 = el("h2", { id: "slide-atual", tabindex: "-1" });
+    var aviso = el("p", { class: "aviso-erro", role: "alert", hidden: "hidden" });
+    var audio = el("audio", { controls: "controls", preload: "auto", "aria-label": "Player de áudio do slide" });
+
+    var bAnt = el("button", { type: "button", text: "Slide anterior" });
+    var bTocar = el("button", { type: "button", class: "principal", text: "Tocar" });
+    var bProx = el("button", { type: "button", text: "Próximo slide" });
+    var botoes = el("div", { class: "botoes" }, [bAnt, bTocar, bProx]);
+
+    var sel = el("select", { id: "vel" });
+    [0.75, 1, 1.25, 1.5, 2].forEach(function (v) {
+      var o = el("option", { value: String(v), text: v + "x" });
+      if (v === atual.velocidade) o.selected = true;
+      sel.appendChild(o);
+    });
+    var labelVel = el("label", { for: "vel" }, [document.createTextNode("Velocidade ")]);
+    labelVel.appendChild(sel);
+
+    var chk = el("input", { type: "checkbox", id: "auto" });
+    chk.checked = atual.auto;
+    var labelAuto = el("label", { for: "auto" }, [chk, document.createTextNode("Tocar o próximo slide automaticamente")]);
+
+    var opcoes = el("div", { class: "opcoes" }, [labelVel, labelAuto]);
+
+    player.appendChild(h2);
+    player.appendChild(aviso);
+    player.appendChild(audio);
+    player.appendChild(botoes);
+    player.appendChild(opcoes);
+    app.appendChild(player);
+
+    var h2lista = el("h2", { text: "Todos os slides" });
+    app.appendChild(h2lista);
+    var ol = el("ol", { class: "slides" });
+    var botoesSlides = ap.slides.map(function (s, idx) {
+      var b = el("button", { type: "button", text: s.titulo });
+      b.addEventListener("click", function () { ir(idx, true); });
+      ol.appendChild(el("li", {}, [b]));
+      return b;
+    });
+    app.appendChild(ol);
+
+    var det = el("details", {}, [
+      el("summary", { text: "Atalhos do teclado" }),
+      el("p", {}, [document.createTextNode("Com o foco fora dos botões: "),
+        el("kbd", { text: "Espaço" }), document.createTextNode(" toca ou pausa, "),
+        el("kbd", { text: "N" }), document.createTextNode(" próximo slide, "),
+        el("kbd", { text: "P" }), document.createTextNode(" slide anterior, "),
+        el("kbd", { text: "+" }), document.createTextNode(" e "),
+        el("kbd", { text: "-" }), document.createTextNode(" mudam a velocidade.")])
+    ]);
+    app.appendChild(det);
+
+    /* funções do player */
+    function ir(idx, tocar) {
+      if (idx < 0 || idx >= ap.slides.length) return;
+      atual.i = idx;
+      guardar("pos:" + ap.id, String(idx));
+      var s = ap.slides[idx];
+      aviso.hidden = true;
+      h2.textContent = "Slide " + (idx + 1) + " de " + ap.slides.length + ": " + s.titulo;
+      audio.src = s.arquivo;
+      audio.defaultPlaybackRate = atual.velocidade;
+      audio.playbackRate = atual.velocidade;
+      audio.load();
+      botoesSlides.forEach(function (b, k) {
+        if (k === idx) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
+      });
+      bAnt.disabled = idx === 0;
+      bProx.disabled = idx === ap.slides.length - 1;
+      anunciar(h2.textContent);
+      if (tocar) {
+        var p = audio.play();
+        if (p && p.catch) p.catch(function () {});
+      }
+    }
+
+    function alternar() {
+      if (audio.paused) { var p = audio.play(); if (p && p.catch) p.catch(function () {}); }
+      else audio.pause();
+    }
+
+    function mudarVelocidade(v) {
+      atual.velocidade = v;
+      sel.value = String(v);
+      audio.defaultPlaybackRate = v;
+      audio.playbackRate = v;
+      guardar("velocidade", String(v));
+      anunciar("Velocidade " + v + " vezes");
+    }
+
+    bAnt.addEventListener("click", function () { ir(atual.i - 1, true); });
+    bProx.addEventListener("click", function () { ir(atual.i + 1, true); });
+    bTocar.addEventListener("click", alternar);
+    sel.addEventListener("change", function () { mudarVelocidade(parseFloat(sel.value)); });
+    chk.addEventListener("change", function () {
+      atual.auto = chk.checked;
+      guardar("auto", chk.checked ? "1" : "0");
+    });
+
+    audio.addEventListener("play", function () { bTocar.textContent = "Pausar"; });
+    audio.addEventListener("pause", function () { bTocar.textContent = "Tocar"; });
+    audio.addEventListener("ended", function () {
+      bTocar.textContent = "Tocar";
+      if (atual.auto && atual.i < ap.slides.length - 1) ir(atual.i + 1, true);
+      else if (atual.i === ap.slides.length - 1) anunciar("Fim da apresentação.");
+    });
+    audio.addEventListener("error", function () {
+      aviso.textContent = "Não foi possível carregar o áudio deste slide. Avise a professora. (Arquivo: " + ap.slides[atual.i].arquivo + ")";
+      aviso.hidden = false;
+    });
+
+    /* atalhos de teclado */
+    atual.teclas = function (e) {
+      var t = e.target;
+      var tag = t && t.tagName;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (tag === "BUTTON" || tag === "SELECT" || tag === "INPUT" || tag === "AUDIO" || tag === "A" || tag === "SUMMARY") return;
+      var k = e.key.toLowerCase();
+      if (k === " ") { e.preventDefault(); alternar(); }
+      else if (k === "n") ir(atual.i + 1, true);
+      else if (k === "p") ir(atual.i - 1, true);
+      else if (k === "+" || k === "=") { var a = [0.75,1,1.25,1.5,2], j = a.indexOf(atual.velocidade); if (j < a.length - 1) mudarVelocidade(a[j + 1]); }
+      else if (k === "-") { var b = [0.75,1,1.25,1.5,2], m = b.indexOf(atual.velocidade); if (m > 0) mudarVelocidade(b[m - 1]); }
+    };
+    document.addEventListener("keydown", atual.teclas);
+
+    ir(atual.i, false);
+    h1.focus();
+  }
+
+  /* ---------- Navegação pelo endereço (#aula-01) ---------- */
+  function rotear() {
+    if (atual && atual.teclas) document.removeEventListener("keydown", atual.teclas);
+    var audioAntigo = document.querySelector("audio");
+    if (audioAntigo) audioAntigo.pause();
+    atual = null;
+
+    var id = decodeURIComponent(location.hash.replace("#", ""));
+    var ap = APRESENTACOES.filter(function (a) { return a.id === id; })[0];
+    if (ap) telaAula(ap); else telaInicial();
+  }
+
+  window.addEventListener("hashchange", rotear);
+  rotear();
+})();
+</script>
+</body>
+</html>
